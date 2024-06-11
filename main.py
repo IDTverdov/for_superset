@@ -61,8 +61,14 @@ r.insert_testing(dfs, id_programm, id_stream)
 dfs = rf.read_os_lesson(f_os_lesson)
 
 # 12. Добавляем уроки и упражнения (Работа с файлом "ОС лекции")
-if new:
-    r.create_lesson(dfs, id_programm)
+# if new:
+#     r.create_lesson(dfs, id_programm)
     
-# 13. Добавляем ОС по упражениям
-# 14. Добавляем прогресс по упражнениям (просмотренные видео, ДЗ, доп.материалы и тд)
+# exrs = rf.read_progress_for_exrs(f_progress)
+# r.create_exsercise(exrs, id_programm)
+
+dfs = rf.read_progress(f_progress)
+# r.insert_exsercise(dfs, id_stream)
+
+# Добавляем слушателей к модулям
+r.insert_module(id_stream)
