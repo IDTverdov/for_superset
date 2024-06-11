@@ -30,7 +30,7 @@ class Run:
         print(f'Поток №{number} создан.')
         return id_stream
 
-    def create_more_modules(self, id_programm, exrs):
+    def create_more_modules(self, id_programm, exrs): 
         '''Внесение все возможных блоков модулей'''
         self.get_connect()
         modules = [i[0].strip() for i in self.db.query(f'''SELECT name FROM module WHERE programm_id = {id_programm};''')]
@@ -42,9 +42,8 @@ class Run:
     def create_lesson(self, dfs, id_programm):
         '''Создание уроков в молулях'''
         self.get_connect()
-
         modules = dfs.keys()
-
+        self.check_moduls(modules, id_programm)
         modules_in_db = self.db.query(f'''SELECT id, name FROM module WHERE progrmm_id = {id_programm};''')
         dict_modules = {}
         for i in modules_in_db:
@@ -67,6 +66,11 @@ class Run:
         for idx in range(len(modules)):
             lessons = self.db.query(f'''SELECT id, name FROM lesson WHERE module_id = {modules[idx][0]};''')
             exrs = exsrs[modules[idx][1]]
+            for lesson in lessons:
+                for exr in exrs:
+                    if lesson[0] in exr:
+                        self.db.query_insert(f'''INSERT INTO exrcise (name, lesson_id) 
+                            VALUES ('{exr.strip(lesson[0])}', {lesson[1]});''')
     
     def insert_user(self, df, id_stream):
         '''Внесение пользователей и добавление на поток'''
@@ -131,18 +135,19 @@ class Run:
             tuple_for_query = (id_shu,)
             tuple_for_query += tuple([row[i] for i in range(3, 19)])
             self.db.query_insert(query, tuple_for_query)
-                    
         print('Обратная связь по итогам программы успешно добавлена')
-    
-    def insert_module(self, ids_shu, ids_module):
+
+
+    def insert_module(self, id_stream):
         '''Добавление слушателей на модули'''
         self.get_connect()
-        for i in ids_shu:
-            for j in ids_module:
-                self.db.query_insert(f'''
-                    INSERT INTO stream_has_user_has_module (stream_has_user_id, module_id)
-                    VALUES ({i}, {j});
-                ''')
+        id_programm = self.db.query(f'''SELECT programm_id FROM stream WHERE id = {id_stream};''')[0][0]
+        modules = self.db.query(f'''SELECT id FROM modules WHERE programm_id = {id_programm};''')
+        ids_shu = self.db.query(f'''SELECT id FROM stream_has_users WHERE stream_id = {id_stream};''')
+        for i in modules:
+            for id_shu in ids_shu:
+                self.db.query_insert(f'''INSERT INTO stream_has_users_has_module (stream_has_users_id, module_id)
+                                     VALUES ({id_shu[0]}, {i[0]});''')
         print('Слушатели подключены к модулям')
 
     def insert_feedback_module(self, dfs, id_programm):
@@ -182,7 +187,7 @@ class Run:
                     f'''SELECT stream_has_users.id FROM stream_has_users
                     JOIN users ON stream_has_users.users_id = users.id
                     WHERE id_from_lms = '{row[1]}' ORDER BY 1 DESC;'''
-                )
+                )[0][0]
                   
                 tuple_for_query = (id_shu, id_module,)
                 tuple_for_query += tuple([row[i] for i in range(3, 12)])
@@ -252,43 +257,47 @@ class Run:
                     id_shu = self.db.query(
                         f'''SELECT stream_has_users.id FROM stream_has_users
                         JOIN users ON stream_has_users.users_id = users.id
-                        WHERE name = '{row[1]}' AND stream_id = {id_stream};''')[0][0]
+                        WHERE name = '{row[1].strip()}' AND stream_id = {id_stream};''')[0][0]
                     type_testing = f'Промежуточный {module}' if module != 'Модуль 5' else 'Итоговый'
                     result = int(row[-1]*100)
                     tuple_for_query = (type_testing, id_shu, result)
                     self.db.query_insert(query, tuple_for_query)
                 print(f'Добавлены результаты тестирования в {module}')
         
-    def insert_exsercise(self, df, module_id):
+    def insert_exsercise(self, dfs, id_stream):
         '''Добавление результатов по упражнениям'''
         self.get_connect()
 
-        exrs = self.db.query(f'''SELECT exercise.id, exercise.name FROM exercise 
-                             JOIN lesson ON lesson.id = exercise.lesson_id 
-                             WHERE module_id = {module_id}''')
-        id_prog = self.db.query(f'''SELECT programm_id FROM module WHERE id = {module_id};''')[0][0]
-        
-        dict_exrs = {}
-        for i in exrs:
-            dict_exrs[i[1].strip()] = i[0]
-        
+        moduls = dfs.keys()
+        self.check_moduls(moduls)
+
         query = '''INSERT INTO users_has_exercise (
             exercise_id, score, feedback, stream_has_user_id
         ) VALUES (
             %s, %s, %s, %s
         );'''
 
-        for row in df.itertuples():
+        for module in moduls:
+            dict_exrs = {}
+            exrs = self.db.query(f'''SELECT exercise.id, CONCAT(lesson.name, ', ', exercise.name)
+                      FROM exercise 
+                      JOIN lesson ON exercise.lesson_id = lesson.id
+                      JOIN module ON lesson.module_id = module.id
+                      WHERE module.name = '{module}';''')
+            for exr in exrs:
+                dict_exrs[exr[1]] = exr[0]
+            
 
-            id_shu = self.db.query(f'''SELECT stream_has_users.id FROM stream_has_users 
-                JOIN users ON stream_has_users.users_id = users.id 
-                JOIN stream ON stream_has_users.stream_id = stream.id
-                WHERE programm_id = {id_prog} and users.name = '{row[3]}';''')[0][0]
-            tuple_for_query = (dict_exrs[row[2].strip()], row[4] if str(row[4])!= 'nan' else 0, row[5], id_shu)
-            self.db.query_insert(query, tuple_for_query)
+            for row in dfs[module].itertuples():
 
-        module = self.db.query(f'''SELECT name FROM module WHERE id = {module_id}''')[0][0]
-        print(f'Добавлены отзывы по упражнениям в {module.strip()}')
+                id_shu = self.db.query(f'''SELECT stream_has_users.id FROM stream_has_users 
+                    JOIN users ON stream_has_users.users_id = users.id 
+                    JOIN stream ON stream_has_users.stream_id = stream.id
+                    WHERE sream.id = {id_stream} and users.name = '{row[3]}';''')[0][0]
+                tuple_for_query = (dict_exrs[row[2].strip()], row[4] if str(row[4])!= 'nan' else 0, row[5], id_shu)
+                self.db.query_insert(query, tuple_for_query)
+
+            print(f'Добавлены отзывы по упражнениям в {module.strip()}')
 
     def select_module(self, id_programm):
         '''Если программа создана, выводим список модулей'''
@@ -298,18 +307,6 @@ class Run:
         list_ids_module = [i[0] for i in s]
         return list_module, list_ids_module
     
-    def insert_more_module(self, name, id_prog):
-        '''Добавление "Доп.материалов"'''
-        self.get_connect()
-
-        self.db.query_insert(f'''INSERT INTO module (name, programm_id) 
-                VALUES ('{name}', {id_prog});''')
-        
-        id = self.db.query('''SELECT id FROM module ORDER BY 1 DESC LIMIT 1;''')[0][0]
-        print(f'Добавлено {name} к Модулям')
-        return id
-
-
     def calc_watch(self, df, dict_names, id_stream, module):
         fios = df['ФИО'].unique()
         for fio in fios:
