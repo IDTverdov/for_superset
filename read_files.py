@@ -37,6 +37,7 @@ def read_os_stream(name):
 def read_os_stream_moduls(name):
     '''Считывание файла с ОС по модулям'''
     list_moduls = cheak_sheets(name)
+
     dfs = {}
     for i in list_moduls:
         df = pd.read_excel(name, sheet_name=i)
@@ -54,17 +55,19 @@ def read_os_stream_moduls(name):
         dfs[i] = df
     return dfs
 
-def read_progress(name):
+def read_progress(name, dict_exrs):
     '''Открытие файла с прогрессом'''
     xl = pd.ExcelFile(name)
     modules = xl.sheet_names
     dfs = {}
     for module in modules:
         df = pd.read_excel(name, sheet_name=module)
-        dfs[module] = df
+        columns = ['ФИО'] + dict_exrs[module]
+        dfs[module] = df[columns]
     return dfs
 
 def read_os_lesson(name):
+    '''Считывание файла с ОС по видео'''
     list_moduls = cheak_sheets(name)
 
     dfs = {}
@@ -77,15 +80,18 @@ def read_os_lesson(name):
             'Оценка',
             'Обратная связь'
         ]]
+
         dfs[i] = df
     return dfs
 
 def read_for_totors(name):
+    '''Считываем имя тьютора'''
     df = pd.read_excel(name, sheet_name='Модуль 1')
     df = df[['Группа тьютора', 'ФИО']]
     return df
 
 def read_assessment(name):
+    '''Считываем результаты ассессмента'''
     df = pd.read_excel(name)
 
     df = df[[
@@ -98,7 +104,8 @@ def read_assessment(name):
     ]]
     return df
 
-def read_progress_testing(name, list_moduls):
+def read_progress_testing(name):
+    list_moduls = cheak_sheets(name)
     dfs = {}
     
     for i in list_moduls:
@@ -107,7 +114,8 @@ def read_progress_testing(name, list_moduls):
         for c in df.columns:
             if c == 'ФИО' or 'Промежуточная аттестация, ' in c:
                 df_total[c] = df[c]
-        dfs[i] = df_total
+        if len(df_total.keys()) > 1:
+            dfs[i] = df_total
     return dfs
 
 def read_progress_for_exrs(name):
@@ -128,6 +136,20 @@ def read_progress_for_exrs(name):
 def cheak_sheets(name):
     xl = pd.ExcelFile(name)
     moduls = xl.sheet_names
+
     if 'По программе' in moduls:
         moduls.remove('По программе')
+
+        # Временное
+    if 'Общее по программе' in moduls:
+        moduls.remove('Общее по программе')
+    if 'Модули' in moduls:
+        moduls.remove('Модули')
+    if 'Тьюторы и эксперты' in moduls:
+        moduls.remove('Тьюторы и эксперты')
+    if 'Открытые вопросы' in moduls:
+        moduls.remove('Открытые вопросы')
+    if 'Лист1' in moduls:
+        moduls.remove('Лист1')
+   
     return moduls
